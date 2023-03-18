@@ -15,6 +15,9 @@ import {FilAddresses} from "@zondax/filecoin-solidity/contracts/v0.8/utils/FilAd
 
 using CBOR for CBOR.CBORBuffer;
 
+// bounty identitied by piece_cid
+// bid identified by bid_id
+
 contract Ubique {
     struct DealRequest {
         // To be cast to a CommonTypes.Cid
@@ -44,23 +47,53 @@ contract Ubique {
     }
 
     struct Bid {
+        uint256 bid_id;
         string path;
-        CommonTypes.FilAddress proposer;
+        CommonTypes.FilAddress providerFilAddress;
+        address provider;
+        bool activated;
+        bool accepted;
+        string region;
+        uint256 storageCapacity;
+        uint256 minReliability;
+        uint256 price;
+        uint256 expiry; //deal duration
+    }
+
+    struct BountyParameters {
+        string region;
+        uint256 storageCapacity;
+        uint256 minReliability;
+        uint256 maxPrice;
+        uint256 expiry; //deal duration
     }
 
     event BountyAdded();
     event BidAccepted();
+    event BidProposed(
+        uint64 indexed bountyId,
+        uint256 indexed bidId,
+        uint256 indexed price
+    );
+    event BountyClamed(
+        uint64 indexed bountyId,
+        uint256 indexed bidId,
+        uint256 indexed price
+    );
 
     mapping(bytes => bool) public cidSet;
     mapping(bytes => uint) public cidSizes;
     mapping(bytes => mapping(uint64 => bool)) public cidProviders;
-    mapping(uint256 => uint256) dealRequestIdsToAcceptedBidIds;
+    mapping(uint64 => uint256) bountyIdRequestIdsToAcceptedBidIds; //dealId (piece_cid)
+    mapping(uint64 => uint256) bountyIdToExpiry;
+    mapping(uint64 => uint256) bountyIdToBountyAmount;
+    mapping(uint64 => BountyParameters) bountyIdToParameters;
 
     DealRequest[] deals;
 
     constructor() {}
 
-    function addBounty(DealRequest newBounty) public {
+    function addBounty(DealRequest newBounty, uint256 bountyAmount) public {
         // add cid
         // addCid(newBounty.piece_cid);
 
@@ -71,7 +104,13 @@ contract Ubique {
         emit BountyAdded();
     }
 
-    function acceptBid(uint256 dealRequestId, uint256 bidId) public {
+    function proposeBid(uint256 bountyId, uint256 price) public {
+        uint256 bidId = 0;
+
+        emit BidProposed(bountyId, bidId, price);
+    }
+
+    function acceptBid(uint256 bountyId, uint256 bidId) public {
         // assign deal request to bid id
 
         //change provider of bounty
@@ -80,6 +119,10 @@ contract Ubique {
 
         //confirm on filecoin network
         emit BidAccepted();
+    }
+
+    function claimBounty() public {
+        emit BountyClaimed(0, 0, 0);
     }
 
     function addCid(bytes calldata cidraw, uint size) internal {
