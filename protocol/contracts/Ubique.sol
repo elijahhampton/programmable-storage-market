@@ -58,6 +58,7 @@ contract Ubique {
         uint256 minReliability;
         uint256 price;
         uint256 expiry; //deal duration
+        uint256 collateralSupplied;
     }
 
     struct BountyParameters {
@@ -66,6 +67,7 @@ contract Ubique {
         uint256 minReliability;
         uint256 maxPrice;
         uint256 expiry; //deal duration
+        uint256 collateralSupplied;
     }
 
     event BountyCreated();
@@ -93,7 +95,7 @@ contract Ubique {
 
     constructor() {}
 
-    function addBounty(DealRequest newBounty, uint256 bountyAmount) public {
+    function addBounty(DealRequest newBounty, uint256 bountyAmount) payable public {
         // add cid
         // addCid(newBounty.piece_cid);
 
@@ -104,7 +106,7 @@ contract Ubique {
         emit BountyCreated();
     }
 
-    function proposeBid(uint256 bountyId, uint256 price) public {
+    function proposeBid(uint256 bountyId, uint256 price) payable public {
         uint256 bidId = 0;
 
         emit BidProposed(bountyId, bidId, price);
