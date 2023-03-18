@@ -1,11 +1,13 @@
 pragma solidity ^0.8.0;
 
 contract Ubique {
+    struct DealRequest {}
+    struct Bid {}
+    struct ExtraParametersV1 {}
+
     constructor() {}
 
     function addBounty() public {}
-
-    function releaseBounty() public {}
 
     function addBid() public {}
 
@@ -19,15 +21,16 @@ contract Ubique {
 
     function releaseBid() public {}
 
+//
     function addCid() public {}
 
     function fund() public {}
 
+//
     function policyOK() public {}
 
     function acceptBid() public {}
 
+//
     function authorizeData() public {}
-
-    function disputeClaimedBounty() public {}
 }
