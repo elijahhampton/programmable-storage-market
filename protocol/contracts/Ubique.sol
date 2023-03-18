@@ -70,6 +70,21 @@ contract Ubique {
         uint256 collateralSupplied;
     }
 
+    struct BountyIndexSet {
+        uint256 idx;
+        bool valid;
+    }
+
+    struct PieceToBountyIdSet {
+        bytes32 bountyId;
+        bool valid;
+    }
+
+    struct BountyProviderSet {
+        bytes provider;
+        bool valid;
+    }
+
     event BountyCreated();
     event BidAccepted();
     event BidProposed(
@@ -83,30 +98,53 @@ contract Ubique {
         uint256 indexed price
     );
 
-    mapping(bytes => bool) public cidSet;
-    mapping(bytes => uint) public cidSizes;
-    mapping(bytes => mapping(uint64 => bool)) public cidProviders;
-    mapping(uint64 => uint256) bountyIdRequestIdsToAcceptedBidIds; //dealId (piece_cid)
-    mapping(uint64 => uint256) bountyIdToExpiry;
-    mapping(uint64 => uint256) bountyIdToBountyAmount;
-    mapping(uint64 => BountyParameters) bountyIdToParameters;
-
     DealRequest[] deals;
+    mapping(bytes => bool) public cidSet; //cid to existence
+    mapping(bytes => uint) public cidSizes; //cid to size
+
+    mapping(bytes => BountyIndexSet) bountyIdToBountyIndexSet;
+    mapping(bytes => BountyParameters) bountyIdToParameters;
+    mapping(bytes => PieceToProviderSet) pieceToProviderSet;
+    mapping(bytes => PieceToBountyIdSet) pieceToBountyIdSet;
 
     constructor() {}
 
-    function addBounty(DealRequest newBounty, uint256 bountyAmount) payable public {
-        // add cid
-        // addCid(newBounty.piece_cid);
+    function addBounty(
+        DealRequest newBounty,
+        BountyParameters memory bountyParameters
+    ) public payable {
+        // add deal to deal array
+        uint256 index = deals.length;
+        deals.push(deal);
 
-        //calculate unique deal request id (idx of array?) deals.length
+        // calculate unique deal request id
+        // creates a unique ID for the deal proposal -- there are many ways to do this
+        bytes32 bountyId = keccak256(
+            abi.encodePacked(block.timestamp, msg.sender, index)
+        );
 
-        //store bounty
+        storeBounty(bountyid, index, newBounty.piece_cid, newBounty.piece_size);
 
-        emit BountyCreated();
+        emit BountyCreated(bountyId);
     }
 
-    function proposeBid(uint256 bountyId, uint256 price) payable public {
+    function storeBounty(
+        bytes32 bountyId,
+        uint256 index,
+        bytes calldata cidraw,
+        uint size,
+        BountyParameters memory bountyParameters
+    ) internal {
+        pieceToBountyIdSet[cidraw] = PieceToBountyIdSet(bountyId, true);
+        pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true);
+        // map bounty id to deal request index
+        bountyIdToProposalIndex[bountyId] = BountyIndexSet(index, true);
+        bountyIdToBountyParameters[bountyId] = bountyParameters;
+
+        cidSizes[cidraw] = size;
+    }
+
+    function proposeBid(uint256 bountyId, uint256 price) public payable {
         uint256 bidId = 0;
 
         emit BidProposed(bountyId, bidId, price);
@@ -127,35 +165,31 @@ contract Ubique {
         emit BountyClaimed(0, 0, 0);
     }
 
-    function addCid(bytes calldata cidraw, uint size) internal {
-        cidSet[cidraw] = true;
-        cidSizes[cidraw] = size;
+    function dealNotify(bytes memory params) public {
+        MarketDealNotifyParams memory mdnp = deserializeMarketDealNotifyParams(
+            params
+        );
+        MarketTypes.DealProposal memory proposal = deserializeDealProposal(
+            mdnp.dealProposal
+        );
+
+        require(
+            pieceToBountyIdSet[proposal.piece_cid.data].valid,
+            "piece cid must be added before authorizing"
+        );
+        require(
+            !pieceToProviderSet[proposal.piece_cid.data].valid,
+            "deal failed policy check: provider already claimed this cid"
+        );
+
+        pieceToProviderSet[proposal.piece_cid.data] = ProviderSet(
+            proposal.provider.data,
+            true
+        );
+        //  pieceDeals[proposal.piece_cid.data] = mdnp.dealId;
     }
 
     function fund() public payable {}
-
-    function bountyIsStored(
-        bytes memory cidraw,
-        uint64 provider
-    ) internal view returns (bool) {
-        bool isAlreadStored = cidProviders[cidraw][provider];
-        return !isAlreadStored;
-    }
-
-    function authorizeData(
-        bytes memory cidraw,
-        uint64 provider,
-        uint size
-    ) public {
-        require(cidSet[cidraw], "cid must be added before authorizing");
-        require(cidSizes[cidraw] == size, "data size must match expected");
-        require(
-            bountyIsStored(cidraw, provider),
-            "deal failed policy check: has provider already claimed this cid?"
-        );
-
-        cidProviders[cidraw][provider] = true;
-    }
 
     function serializeExtraParamsV1(
         ExtraParamsV1 memory params
@@ -176,8 +210,17 @@ contract Ubique {
         return serializeExtraParamsV1(deal.extra_params);
     }
 
-    function getDealProposal(
-        bytes32 proposalId
+    function getBountyDealRequestRaw(
+        bytes32 bountyId
+    ) internal view returns (DealRequest memory) {
+        ProposalIdx memory pi = dealProposals[proposalId];
+        require(pi.valid, "proposalId not available");
+
+        return deals[pi.idx];
+    }
+
+    function getBountyDealRequest(
+        bytes32 bountyId
     ) public view returns (bytes memory) {
         // TODO make these array accesses safe.
         DealRequest memory deal = getDealRequest(proposalId);
@@ -199,5 +242,28 @@ contract Ubique {
         ret.client_collateral = uintToBigInt(deal.client_collateral);
 
         return serializeDealProposal(ret);
+    }
+
+    // Below 2 funcs need to go to filecoin.sol
+    function uintToBigInt(
+        uint256 value
+    ) internal view returns (CommonTypes.BigInt memory) {
+        BigNumbers.BigNumber memory bigNumVal = BigNumbers.init(value, false);
+        CommonTypes.BigInt memory bigIntVal = CommonTypes.BigInt(
+            bigNumVal.val,
+            bigNumVal.neg
+        );
+        return bigIntVal;
+    }
+
+    function bigIntToUint(
+        CommonTypes.BigInt memory bigInt
+    ) internal view returns (uint256) {
+        BigNumbers.BigNumber memory bigNumUint = BigNumbers.init(
+            bigInt.val,
+            bigInt.neg
+        );
+        uint256 bigNumExtractedUint = uint256(bytes32(bigNumUint.val));
+        return bigNumExtractedUint;
     }
 }
