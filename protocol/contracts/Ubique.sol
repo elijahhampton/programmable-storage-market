@@ -16,21 +16,14 @@ import {FilAddresses} from "@zondax/filecoin-solidity/contracts/v0.8/utils/FilAd
 using CBOR for CBOR.CBORBuffer;
 
 contract Ubique {
-    mapping(bytes => bool) public cidSet;
-    mapping(bytes => uint) public cidSizes;
-    mapping(bytes => mapping(uint64 => bool)) public cidProviders;
-
-    // User request for this contract to make a deal. This structure is modelled after Filecoin's Deal
-    // Proposal, but leaves out the provider, since any provider can pick up a deal broadcast by this
-    // contract.
     struct DealRequest {
         // To be cast to a CommonTypes.Cid
         bytes piece_cid;
         uint64 piece_size;
         bool verified_deal;
         // To be cast to a CommonTypes.FilAddress
-        // bytes client_addr;
-        // CommonTypes.FilAddress provider;
+        //bytes client_addr;
+        CommonTypes.FilAddress provider;
         string label;
         int64 start_epoch;
         int64 end_epoch;
@@ -52,18 +45,40 @@ contract Ubique {
 
     struct Bid {
         string path;
+        CommonTypes.FilAddress proposer;
     }
 
     event BountyAdded();
     event BidAccepted();
 
+    mapping(bytes => bool) public cidSet;
+    mapping(bytes => uint) public cidSizes;
+    mapping(bytes => mapping(uint64 => bool)) public cidProviders;
+    mapping(uint256 => uint256) dealRequestIdsToAcceptedBidIds;
+
+    DealRequest[] deals;
+
     constructor() {}
 
     function addBounty(DealRequest newBounty) public {
+        // add cid
+        // addCid(newBounty.piece_cid);
+
+        //calculate unique deal request id (idx of array?) deals.length
+
+        //store bounty
+
         emit BountyAdded();
     }
 
-    function acceptBid(uint256 bidId) public {
+    function acceptBid(uint256 dealRequestId, uint256 bidId) public {
+        // assign deal request to bid id
+
+        //change provider of bounty
+
+        //send money to storage provider
+
+        //confirm on filecoin network
         emit BidAccepted();
     }
 
@@ -109,14 +124,16 @@ contract Ubique {
         return buf.data();
     }
 
-        function getExtraParams(
+    function getExtraParams(
         bytes32 proposalId
     ) public view returns (bytes memory extra_params) {
         DealRequest memory deal = getDealRequest(proposalId);
         return serializeExtraParamsV1(deal.extra_params);
     }
 
-        function getDealProposal(bytes32 proposalId) view public returns (bytes memory) {
+    function getDealProposal(
+        bytes32 proposalId
+    ) public view returns (bytes memory) {
         // TODO make these array accesses safe.
         DealRequest memory deal = getDealRequest(proposalId);
 
@@ -130,7 +147,9 @@ contract Ubique {
         ret.label = deal.label;
         ret.start_epoch = deal.start_epoch;
         ret.end_epoch = deal.end_epoch;
-        ret.storage_price_per_epoch = uintToBigInt(deal.storage_price_per_epoch);
+        ret.storage_price_per_epoch = uintToBigInt(
+            deal.storage_price_per_epoch
+        );
         ret.provider_collateral = uintToBigInt(deal.provider_collateral);
         ret.client_collateral = uintToBigInt(deal.client_collateral);
 
