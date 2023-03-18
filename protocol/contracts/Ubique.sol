@@ -68,7 +68,7 @@ contract Ubique {
         uint256 expiry; //deal duration
     }
 
-    event BountyAdded();
+    event BountyCreated();
     event BidAccepted();
     event BidProposed(
         uint64 indexed bountyId,
@@ -101,7 +101,7 @@ contract Ubique {
 
         //store bounty
 
-        emit BountyAdded();
+        emit BountyCreated();
     }
 
     function proposeBid(uint256 bountyId, uint256 price) public {
