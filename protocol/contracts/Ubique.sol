@@ -6,12 +6,11 @@ import {MarketAPI} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.
 import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
 import {MarketTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
 import {AccountTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/AccountTypes.sol";
-import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
 import {AccountCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/AccountCbor.sol";
 import {MarketCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
 import {BytesCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
-import {BigNumbers} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/external/BigNumbers.sol";
-import {CBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/external/CBOR.sol";
+import { BigNumbers, BigNumber } from "@zondax/solidity-bignumber/src/BigNumbers.sol";
+import {CBOR} from "./CBOR.sol";
 import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
 import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
 
