@@ -1,17 +1,19 @@
+// SPDX-License-Identifier: UNLICENSED
+
 pragma solidity ^0.8.0;
 
-import {MarketAPI} from "@zondax/filecoin-solidity/contracts/v0.8/MarketAPI.sol";
-import {CommonTypes} from "@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
-import {MarketTypes} from "@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
-import {AccountTypes} from "@zondax/filecoin-solidity/contracts/v0.8/types/AccountTypes.sol";
-import {CommonTypes} from "@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
-import {AccountCBOR} from "@zondax/filecoin-solidity/contracts/v0.8/cbor/AccountCbor.sol";
-import {MarketCBOR} from "@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
-import {BytesCBOR} from "@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
-import {BigNumbers} from "@zondax/filecoin-solidity/contracts/v0.8/external/BigNumbers.sol";
-import {CBOR} from "@zondax/filecoin-solidity/contracts/v0.8/external/CBOR.sol";
-import {Misc} from "@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
-import {FilAddresses} from "@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
+import {MarketAPI} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/MarketAPI.sol";
+import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
+import {MarketTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
+import {AccountTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/AccountTypes.sol";
+import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
+import {AccountCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/AccountCbor.sol";
+import {MarketCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
+import {BytesCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
+import {BigNumbers} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/external/BigNumbers.sol";
+import {CBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/external/CBOR.sol";
+import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
+import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
 
 using CBOR for CBOR.CBORBuffer;
 
@@ -26,7 +28,7 @@ contract Ubique {
         uint64 piece_size;
         bool verified_deal;
         // To be cast to a CommonTypes.FilAddress
-        //bytes client_addr;
+        // bytes client_addr;
         CommonTypes.FilAddress provider;
         string label;
         int64 start_epoch;
@@ -96,7 +98,7 @@ contract Ubique {
         address(0xfF00000000000000000000000000000000000007);
 
     event BountyCreated();
-    event BidAccepted();
+    event BidAccepted(bytes32 indexed bountyId, uint256 indexed bidId);
     event BidProposed(
         uint64 indexed bountyId,
         uint256 indexed bidId
@@ -104,8 +106,7 @@ contract Ubique {
 
     event BountyClaimed(
         uint64 indexed bountyId,
-        uint256 indexed bidId,
-        uint256 indexed price
+        uint256 indexed bidId
     );
 
     DealRequest[] deals;
@@ -119,6 +120,7 @@ contract Ubique {
     mapping(bytes => PieceToBountyIdSet) private pieceToBountyIdSet;
     mapping(bytes => Bid[]) private bountyIdToBids;
     mapping(uint256 => Bid) private bidIdToBid; //
+    mapping(bytes => uint256) private pieceIdToAcceptedBidId; //
     mapping(address => BidValiditySet) private providerAddressToBidValiditySet;
 
     constructor() {}
@@ -158,15 +160,16 @@ contract Ubique {
         cidSizes[cidraw] = size;
     }
 
-    function proposeBid(uint256 bountyId, Bid storage bid) public payable {
+    function proposeBid(bytes32 bountyId, Bid storage bid) public payable {
         BountyIndexSet bountyIndexSet = bountyIdToBountyIndexSet[bountyId];
         // using the bountyID, we need the deal request (the bounty)
         // check to see if the bounty exists
         require(bountyIndexSet.valid, "Deal request doesn't exist");
 
         DealRequest dealRequest = deals[bountyIndexSet.idx];
-    //     maps bountyIDs to array of bids
-    // set bidID to length of array before pushing bid into it 
+
+        // maps bountyIDs to array of bids
+        // set bidID to length of array before pushing bid into it 
         bountyIdToBids[bountyId].push(bid);
 
         // emit an event indicating that a new bid was proposed
@@ -174,24 +177,26 @@ contract Ubique {
         bid.bid_id = bidId;
         bid.provider = msg.sender;
         bidIdToBid[bidId] = bid;
-        providerAddressToBidValiditySet[msg.sender] = BidValiditySet(msg.sender, bountyId, false);
+        // providerAddressToBidValiditySet[msg.sender] = BidValiditySet(msg.sender, bountyId, false);
         emit BidProposed(bountyId, bidId);
     }
 
-    function acceptBid(uint256 bountyId, uint256 bidId) public {
-        // assign deal request to bid id
+    function acceptBid(bytes32 bountyId, uint256 bidId) public {
+        // check if deal request has been verified
+        // We need the "DealRequest", we need to access the array
+        DealRequest storage dealRequest = deals[bountyIdToBountyIndexSet[bountyId].idx];
+        require(dealRequest.verified_deal == false, "Deal request is verified");
 
-        // change provider of bounty
+        // make sure the bid wasn’t already accepted
+        Bid storage bid = bidIdToBid[bidId];
+        require(bid.accepted == false, "bid is already accepted");
+        require(bid.activated == false, "bid is already activated");
 
-        // send money to storage provider
+        bid.accepted = true;
+        pieceIdToAcceptedBidId[dealRequest.piece_cid] = bidId;
 
         // confirm on filecoin network
-        emit BidAccepted();
-    }
-
-    function claimBounty() public {
-        // 
-        emit BountyClaimed(0, 0, 0);
+        emit BidAccepted(bountyId, bidId);
     }
 
     function dealNotify(bytes memory params) public {
@@ -219,7 +224,16 @@ contract Ubique {
         // at this point, the deal is settled
         pieceToDealId[proposal.piece_cid.data] = mdnp.dealId;
 
-        // 
+        // TODO: Need to set dealProposal to verified and bid to activated
+        uint256 bidId = pieceIdToAcceptedBidId[proposal.piece_cid.data];
+        bidIdToBid[bidId].activated = true;
+
+        uint64 bountyId = pieceToBountyIdSet[proposal.piece_cid.data].bountyId;
+        uint256 indx = bountyIdToBountyIndexSet[bountyId].idx;
+
+        DealRequest storage dR = deals[indx];
+        dR.verified_deal = true;
+        emit BountyClaimed(bountyId, bidId);
     }
 
     function fund() public payable {}
@@ -352,7 +366,7 @@ contract Ubique {
         } else if (method == MARKET_NOTIFY_DEAL_METHOD_NUM) {
             dealNotify(params);
         } else if (method == DATACAP_RECEIVER_HOOK_METHOD_NUM) {
-            receiveDataCap(params);
+            // receiveDataCap(params);
         } else {
             revert("the filecoin method that was called is not handled");
         }
