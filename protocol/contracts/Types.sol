@@ -33,7 +33,7 @@ function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (M
 
 function serializeDealProposal(MarketTypes.DealProposal memory dealProposal) pure returns (bytes memory) {
     // FIXME what should the max length be on the buffer?
-    CBOR.CBORBuffer memory buf = CBOR.create(64);
+    FilecoinCBOR memory buf = CBOR.create(64);
 
     buf.startFixedArray(11);
 

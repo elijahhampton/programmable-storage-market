@@ -9,10 +9,11 @@ import {AccountTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/
 import {AccountCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/AccountCbor.sol";
 import {MarketCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
 import {BytesCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
-import { BigNumbers, BigNumber } from "@zondax/solidity-bignumber/src/BigNumbers.sol";
+import { BigNumbers, BigNumber } from "../node_modules/@zondax/solidity-bignumber/src/BigNumbers.sol";
 import {CBOR} from "./CBOR.sol";
 import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
 import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
+import {MarketDealNotifyParams, deserializeMarketDealNotifyParams, serializeDealProposal, deserializeDealProposal} from "./Types.sol";
 
 using CBOR for CBOR.CBORBuffer;
 
@@ -76,7 +77,7 @@ contract Ubique {
         bool valid;
     }
 
-    struct BountyProviderSet {
+    struct PieceToProviderSet {
         bytes provider;
         bool valid;
     }
@@ -114,7 +115,7 @@ contract Ubique {
     mapping(bytes => uint64) public pieceToDealId;
 
     mapping(bytes => BountyIndexSet) private bountyIdToBountyIndexSet;
-    mapping(bytes => BountyParameters) private bountyIdToParameters;
+    mapping(bytes => BountyParameters) private bountyIdToBountyParameters;
     mapping(bytes => PieceToProviderSet) private pieceToProviderSet;
     mapping(bytes => PieceToBountyIdSet) private pieceToBountyIdSet;
     mapping(bytes => Bid[]) private bountyIdToBids;
@@ -125,7 +126,7 @@ contract Ubique {
     constructor() {}
 
     function addBounty(
-        DealRequest newBounty,
+        DealRequest calldata newBounty,
         BountyParameters memory bountyParameters
     ) public payable {
         // add deal to deal array
@@ -138,7 +139,7 @@ contract Ubique {
             abi.encodePacked(block.timestamp, msg.sender, index)
         );
 
-        storeBounty(bountyid, index, newBounty.piece_cid, newBounty.piece_size);
+        storeBounty(bountyId, index, newBounty.piece_cid, newBounty.piece_size);
 
         emit BountyCreated(bountyId);
     }
@@ -159,13 +160,13 @@ contract Ubique {
         cidSizes[cidraw] = size;
     }
 
-    function proposeBid(bytes32 bountyId, Bid storage bid) public payable {
-        BountyIndexSet bountyIndexSet = bountyIdToBountyIndexSet[bountyId];
+    function proposeBid(bytes32 bountyId, Bid calldata bid) public payable {
+        BountyIndexSet memory bountyIndexSet = bountyIdToBountyIndexSet[bountyId];
         // using the bountyID, we need the deal request (the bounty)
         // check to see if the bounty exists
         require(bountyIndexSet.valid, "Deal request doesn't exist");
 
-        DealRequest dealRequest = deals[bountyIndexSet.idx];
+        DealRequest memory dealRequest = deals[bountyIndexSet.idx];
 
         // maps bountyIDs to array of bids
         // set bidID to length of array before pushing bid into it 
@@ -216,7 +217,7 @@ contract Ubique {
             "deal failed policy check: provider already claimed this cid"
         );
 
-        pieceToProviderSet[proposal.piece_cid.data] = ProviderSet(
+        pieceToProviderSet[proposal.piece_cid.data] = PieceToProviderSet(
             proposal.provider.data,
             true
         );
@@ -239,7 +240,7 @@ contract Ubique {
 
     function serializeExtraParamsV1(
         ExtraParamsV1 memory params
-    ) pure returns (bytes memory) {
+    ) internal pure returns (bytes memory) {
         CBOR.CBORBuffer memory buf = CBOR.create(64);
         buf.startFixedArray(4);
         buf.writeString(params.location_ref);
@@ -259,7 +260,7 @@ contract Ubique {
     function getBountyDealRequestRaw(
         bytes32 bountyId
     ) internal view returns (DealRequest memory) {
-        ProposalIdx memory pi = dealProposals[proposalId];
+        BountyIndexSet memory pi = bountyIdToBountyIndexSet[bountyId];
         require(pi.valid, "proposalId not available");
 
         return deals[pi.idx];
@@ -269,7 +270,7 @@ contract Ubique {
         bytes32 bountyId
     ) public view returns (bytes memory) {
         // TODO make these array accesses safe.
-        DealRequest memory deal = getBountyDealRequestRaw(proposalId);
+        DealRequest memory deal = getBountyDealRequestRaw(bountyId);
 
         MarketTypes.DealProposal memory ret;
         ret.piece_cid = CommonTypes.Cid(deal.piece_cid);
@@ -294,7 +295,7 @@ contract Ubique {
     function uintToBigInt(
         uint256 value
     ) internal view returns (CommonTypes.BigInt memory) {
-        BigNumbers.BigNumber memory bigNumVal = BigNumbers.init(value, false);
+        BigNumber memory bigNumVal = BigNumbers.init(value, false);
         CommonTypes.BigInt memory bigIntVal = CommonTypes.BigInt(
             bigNumVal.val,
             bigNumVal.neg
@@ -305,12 +306,19 @@ contract Ubique {
     function bigIntToUint(
         CommonTypes.BigInt memory bigInt
     ) internal view returns (uint256) {
-        BigNumbers.BigNumber memory bigNumUint = BigNumbers.init(
+        BigNumber memory bigNumUint = BigNumbers.init(
             bigInt.val,
             bigInt.neg
         );
         uint256 bigNumExtractedUint = uint256(bytes32(bigNumUint.val));
         return bigNumExtractedUint;
+    }
+
+     // TODO fix in filecoin-solidity. They're using the wrong hex value.
+    function getDelegatedAddress(
+        address addr
+    ) internal pure returns (CommonTypes.FilAddress memory) {
+        return CommonTypes.FilAddress(abi.encodePacked(hex"040a", addr));
     }
 
     // authenticateMessage is the callback from the market actor into the contract
@@ -331,8 +339,8 @@ contract Ubique {
         );
 
         bytes memory pieceCid = proposal.piece_cid.data;
-        PieceToBountyIdSet ptBIdSet = pieceToBountyIdSet[pieceCid];
-        PieceToProviderSet pwrSet = pieceToProviderSet[pieceCid];
+        PieceToBountyIdSet memory ptBIdSet = pieceToBountyIdSet[pieceCid];
+        PieceToProviderSet memory pwrSet = pieceToProviderSet[pieceCid];
 
         require(ptBIdSet.valid, "piece cid must be added before authorizing");
         require(!pwrSet.valid, "deal failed policy check: provider already claimed this cid");
