@@ -19,6 +19,7 @@ using CBOR for CBOR.CBORBuffer;
 // bid identified by bid_id
 
 contract Ubique {
+    // Bounty
     struct DealRequest {
         // To be cast to a CommonTypes.Cid
         bytes piece_cid;
@@ -40,8 +41,8 @@ contract Ubique {
     // Extra parameters associated with the deal request. These are off-protocol flags that
     // the storage provider will need.
     struct ExtraParamsV1 {
-        string location_ref;
-        uint64 car_size;
+        string location_ref;  // where the prov can find the file
+        uint64 car_size;  // size of file
         bool skip_ipni_announce;
         bool remove_unsealed_copy;
     }
@@ -53,20 +54,14 @@ contract Ubique {
         address provider;
         bool activated;
         bool accepted;
-        string region;
-        uint256 storageCapacity;
-        uint256 minReliability;
-        uint256 price;
-        uint256 expiry; //deal duration
-        uint256 collateralSupplied;
+        BountyParameters bountyParams;
     }
 
-    struct BountyParameters {
+    struct BountyParameters {  // represents specifics reagrdeing bid
         string region;
         uint256 storageCapacity;
         uint256 minReliability;
         uint256 maxPrice;
-        uint256 expiry; //deal duration
         uint256 collateralSupplied;
     }
 
@@ -85,14 +80,29 @@ contract Ubique {
         bool valid;
     }
 
+    struct BidValiditySet {
+        address bidder;
+        bytes32 bounty_id;
+        bool bidIsAccepted;
+    }
+
+
+    uint64 public constant AUTHENTICATE_MESSAGE_METHOD_NUM = 2643134072;
+    uint64 public constant DATACAP_RECEIVER_HOOK_METHOD_NUM = 3726118371;
+    uint64 public constant MARKET_NOTIFY_DEAL_METHOD_NUM = 4186741094;
+    address public constant MARKET_ACTOR_ETH_ADDRESS =
+        address(0xff00000000000000000000000000000000000005);
+    address public constant DATACAP_ACTOR_ETH_ADDRESS =
+        address(0xfF00000000000000000000000000000000000007);
+
     event BountyCreated();
     event BidAccepted();
     event BidProposed(
         uint64 indexed bountyId,
-        uint256 indexed bidId,
-        uint256 indexed price
+        uint256 indexed bidId
     );
-    event BountyClamed(
+
+    event BountyClaimed(
         uint64 indexed bountyId,
         uint256 indexed bidId,
         uint256 indexed price
@@ -101,11 +111,15 @@ contract Ubique {
     DealRequest[] deals;
     mapping(bytes => bool) public cidSet; //cid to existence
     mapping(bytes => uint) public cidSizes; //cid to size
+    mapping(bytes => uint64) public pieceToDealId;
 
-    mapping(bytes => BountyIndexSet) bountyIdToBountyIndexSet;
-    mapping(bytes => BountyParameters) bountyIdToParameters;
-    mapping(bytes => PieceToProviderSet) pieceToProviderSet;
-    mapping(bytes => PieceToBountyIdSet) pieceToBountyIdSet;
+    mapping(bytes => BountyIndexSet) private bountyIdToBountyIndexSet;
+    mapping(bytes => BountyParameters) private bountyIdToParameters;
+    mapping(bytes => PieceToProviderSet) private pieceToProviderSet;
+    mapping(bytes => PieceToBountyIdSet) private pieceToBountyIdSet;
+    mapping(bytes => Bid[]) private bountyIdToBids;
+    mapping(uint256 => Bid) private bidIdToBid; //
+    mapping(address => BidValiditySet) private providerAddressToBidValiditySet;
 
     constructor() {}
 
@@ -115,7 +129,7 @@ contract Ubique {
     ) public payable {
         // add deal to deal array
         uint256 index = deals.length;
-        deals.push(deal);
+        deals.push(newBounty);
 
         // calculate unique deal request id
         // creates a unique ID for the deal proposal -- there are many ways to do this
@@ -136,32 +150,47 @@ contract Ubique {
         BountyParameters memory bountyParameters
     ) internal {
         pieceToBountyIdSet[cidraw] = PieceToBountyIdSet(bountyId, true);
-        pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true);
+       // pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true); //
         // map bounty id to deal request index
-        bountyIdToProposalIndex[bountyId] = BountyIndexSet(index, true);
+        bountyIdToBountyIndexSet[bountyId] = BountyIndexSet(index, true);
         bountyIdToBountyParameters[bountyId] = bountyParameters;
 
         cidSizes[cidraw] = size;
     }
 
-    function proposeBid(uint256 bountyId, uint256 price) public payable {
-        uint256 bidId = 0;
+    function proposeBid(uint256 bountyId, Bid storage bid) public payable {
+        BountyIndexSet bountyIndexSet = bountyIdToBountyIndexSet[bountyId];
+        // using the bountyID, we need the deal request (the bounty)
+        // check to see if the bounty exists
+        require(bountyIndexSet.valid, "Deal request doesn't exist");
 
-        emit BidProposed(bountyId, bidId, price);
+        DealRequest dealRequest = deals[bountyIndexSet.idx];
+    //     maps bountyIDs to array of bids
+    // set bidID to length of array before pushing bid into it 
+        bountyIdToBids[bountyId].push(bid);
+
+        // emit an event indicating that a new bid was proposed
+        uint256 bidId = bountyIdToBids[bountyId].length;
+        bid.bid_id = bidId;
+        bid.provider = msg.sender;
+        bidIdToBid[bidId] = bid;
+        providerAddressToBidValiditySet[msg.sender] = BidValiditySet(msg.sender, bountyId, false);
+        emit BidProposed(bountyId, bidId);
     }
 
     function acceptBid(uint256 bountyId, uint256 bidId) public {
         // assign deal request to bid id
 
-        //change provider of bounty
+        // change provider of bounty
 
-        //send money to storage provider
+        // send money to storage provider
 
-        //confirm on filecoin network
+        // confirm on filecoin network
         emit BidAccepted();
     }
 
     function claimBounty() public {
+        // 
         emit BountyClaimed(0, 0, 0);
     }
 
@@ -178,6 +207,7 @@ contract Ubique {
             "piece cid must be added before authorizing"
         );
         require(
+            // maps pieceID to provider
             !pieceToProviderSet[proposal.piece_cid.data].valid,
             "deal failed policy check: provider already claimed this cid"
         );
@@ -186,7 +216,10 @@ contract Ubique {
             proposal.provider.data,
             true
         );
-        //  pieceDeals[proposal.piece_cid.data] = mdnp.dealId;
+        // at this point, the deal is settled
+        pieceToDealId[proposal.piece_cid.data] = mdnp.dealId;
+
+        // 
     }
 
     function fund() public payable {}
@@ -206,7 +239,7 @@ contract Ubique {
     function getExtraParams(
         bytes32 proposalId
     ) public view returns (bytes memory extra_params) {
-        DealRequest memory deal = getDealRequest(proposalId);
+        DealRequest memory deal = getBountyDealRequestRaw(proposalId);
         return serializeExtraParamsV1(deal.extra_params);
     }
 
@@ -223,7 +256,7 @@ contract Ubique {
         bytes32 bountyId
     ) public view returns (bytes memory) {
         // TODO make these array accesses safe.
-        DealRequest memory deal = getDealRequest(proposalId);
+        DealRequest memory deal = getBountyDealRequestRaw(proposalId);
 
         MarketTypes.DealProposal memory ret;
         ret.piece_cid = CommonTypes.Cid(deal.piece_cid);
@@ -266,4 +299,64 @@ contract Ubique {
         uint256 bigNumExtractedUint = uint256(bytes32(bigNumUint.val));
         return bigNumExtractedUint;
     }
+
+    // authenticateMessage is the callback from the market actor into the contract
+    // as part of PublishStorageDeals. This message holds the deal proposal from the
+    // miner, which needs to be validated by the contract in accordance with the
+    // deal requests made and the contract's own policies
+    // @params - cbor byte array of AccountTypes.AuthenticateMessageParams
+    function authenticateMessage(bytes memory params) internal view {
+        require(
+            msg.sender == MARKET_ACTOR_ETH_ADDRESS,
+            "msg.sender needs to be market actor f05"
+        );
+
+        AccountTypes.AuthenticateMessageParams memory amp = params
+            .deserializeAuthenticateMessageParams();
+        MarketTypes.DealProposal memory proposal = deserializeDealProposal(
+            amp.message
+        );
+
+        bytes memory pieceCid = proposal.piece_cid.data;
+        PieceToBountyIdSet ptBIdSet = pieceToBountyIdSet[pieceCid];
+        PieceToProviderSet pwrSet = pieceToProviderSet[pieceCid];
+
+        require(ptBIdSet.valid, "piece cid must be added before authorizing");
+        require(!pwrSet.valid, "deal failed policy check: provider already claimed this cid");
+
+        DealRequest memory req = getBountyDealRequestRaw(ptBIdSet.bountyId);
+        require(proposal.verified_deal == req.verified_deal, "verified_deal param mismatch");
+        require(bigIntToUint(proposal.storage_price_per_epoch) <= req.storage_price_per_epoch, "storage price greater than request amount");
+        require(bigIntToUint(proposal.client_collateral) <= req.client_collateral, "client collateral greater than request amount");
+    }
+
+    // handle_filecoin_method is the universal entry point for any evm based
+    // actor for a call coming from a builtin filecoin actor
+    // @method - FRC42 method number for the specific method hook
+    // @params - CBOR encoded byte array params
+    function handle_filecoin_method(
+        uint64 method,
+        uint64,
+        bytes memory params
+    ) public returns (uint32, uint64, bytes memory) {
+        bytes memory ret;
+        uint64 codec;
+        // dispatch methods
+        if (method == AUTHENTICATE_MESSAGE_METHOD_NUM) {
+            authenticateMessage(params);
+            // If we haven't reverted, we should return a CBOR true to indicate that verification passed.
+            CBOR.CBORBuffer memory buf = CBOR.create(1);
+            buf.writeBool(true);
+            ret = buf.data();
+            codec = Misc.CBOR_CODEC;
+        } else if (method == MARKET_NOTIFY_DEAL_METHOD_NUM) {
+            dealNotify(params);
+        } else if (method == DATACAP_RECEIVER_HOOK_METHOD_NUM) {
+            receiveDataCap(params);
+        } else {
+            revert("the filecoin method that was called is not handled");
+        }
+        return (0, codec, ret);
+    }
+
 }
