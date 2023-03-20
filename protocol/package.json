@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@zondax/filecoin-solidity": "^4.0.2",
-    "@zondax/solidity-bignumber": "^0.1.0"
+    "@zondax/solidity-bignumber": "^0.1.0",
+    "solidity-cborutils": "^2.0.0"
   }
 }

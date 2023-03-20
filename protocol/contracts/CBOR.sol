@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-import "@ensdomains/buffer/contracts/Buffer.sol";
+import "./Buffer.sol";
 
 /**
 * @dev A library for populating CBOR encoded payload in Solidity.
@@ -40,6 +40,10 @@ library CBOR {
     uint8 private constant CBOR_TRUE = 21;
     uint8 private constant CBOR_NULL = 22;
     uint8 private constant CBOR_UNDEFINED = 23;
+
+    uint8 private constant TAG_TYPE_CID_CODE = 42;
+    uint8 private constant PAYLOAD_LEN_8_BITS = 24;
+
 
     function create(uint256 capacity) internal pure returns(CBORBuffer memory cbor) {
         Buffer.init(cbor.buf, capacity);
@@ -219,4 +223,19 @@ library CBOR {
     function writeContentFree(CBORBuffer memory buf, uint8 value) private pure {
         buf.buf.appendUint8(uint8((MAJOR_TYPE_CONTENT_FREE << 5) | value));
     }
+
+    /// @notice Write a CID into a CBOR buffer.
+    /// @dev The CBOR major will be 6 (type 'tag') and the tag type value is 42, as per CBOR tag assignments.
+    /// @dev https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
+    /// @param buf buffer containing the actual CBOR serialization process
+    /// @param value CID value to serialize as CBOR
+    function writeCid(CBORBuffer memory buf, bytes memory value) internal pure {
+        buf.buf.appendUint8(uint8(((MAJOR_TYPE_TAG << 5) | PAYLOAD_LEN_8_BITS)));
+        buf.buf.appendUint8(TAG_TYPE_CID_CODE);
+        // See https://ipld.io/specs/codecs/dag-cbor/spec/#links for explanation on 0x00 prefix.
+        //buf.writeBytes(bytes.concat(hex'00', value));
+        buf.buf.append(bytes.concat(hex'00', value));
+
+    }
+
 }

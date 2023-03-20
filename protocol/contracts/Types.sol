@@ -2,12 +2,13 @@
 //pragma solidity ^0.8.17;
 pragma solidity ^0.8.0;
 
-import { MarketTypes } from "@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
-import { CBOR } from "./CBOR.sol";
-import { FilecoinCBOR } from "@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
-import { CBORDecoder } from "@zondax/filecoin-solidity/contracts/v0.8/utils/CborDecode.sol";
-import { CommonTypes } from "@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
-import { BigIntCBOR } from "@zondax/filecoin-solidity/contracts/v0.8/cbor/BigIntCbor.sol";
+import { MarketTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
+import "../node_modules/solidity-cborutils/contracts/CBOR.sol";
+import { FilecoinCBOR } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
+import { CBORDecoder } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/CborDecode.sol";
+import { CommonTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
+import { BigIntCBOR } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BigIntCbor.sol";
+//import { Buffer } from "./Buffer.sol";
 
 using CBOR for CBOR.CBORBuffer;
 using CBORDecoder for bytes;
@@ -31,29 +32,29 @@ function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (M
     (ret.dealId, byteIdx) = rawResp.readUInt64(byteIdx);
 }
 
-function serializeDealProposal(MarketTypes.DealProposal memory dealProposal) pure returns (bytes memory) {
-    // FIXME what should the max length be on the buffer?
-    FilecoinCBOR memory buf = CBOR.create(64);
+// function serializeDealProposal(MarketTypes.DealProposal memory dealProposal) pure returns (bytes memory) {
+//     // FIXME what should the max length be on the buffer?
+//     Buffer.buffer memory buf = Buffer.init(64);
 
-    buf.startFixedArray(11);
+//     buf.startFixedArray(11);
 
-    // TODO writeCid is buggy because it does not set the expected 0x00 prefix as per
-    // https://ipld.io/specs/codecs/dag-cbor/spec/#links. We do it here, and will submit
-    // a bugfix upstream.
-    buf.writeCid(bytes.concat(hex'00', dealProposal.piece_cid.data));
-    buf.writeUInt64(dealProposal.piece_size);
-    buf.writeBool(dealProposal.verified_deal);
-    buf.writeBytes(dealProposal.client.data);
-    buf.writeBytes(dealProposal.provider.data);
-    buf.writeString(dealProposal.label);
-    buf.writeInt64(dealProposal.start_epoch);
-    buf.writeInt64(dealProposal.end_epoch);
-    buf.writeBytes(dealProposal.storage_price_per_epoch.serializeBigInt());
-    buf.writeBytes(dealProposal.provider_collateral.serializeBigInt());
-    buf.writeBytes(dealProposal.client_collateral.serializeBigInt());
+//     // TODO writeCid is buggy because it does not set the expected 0x00 prefix as per
+//     // https://ipld.io/specs/codecs/dag-cbor/spec/#links. We do it here, and will submit
+//     // a bugfix upstream.
+//     buf.writeCid(bytes.concat(hex'00', dealProposal.piece_cid.data));
+//     buf.writeUInt64(dealProposal.piece_size);
+//     buf.writeBool(dealProposal.verified_deal);
+//     buf.writeBytes(dealProposal.client.data);
+//     buf.writeBytes(dealProposal.provider.data);
+//     buf.writeString(dealProposal.label);
+//     buf.writeInt64(dealProposal.start_epoch);
+//     buf.writeInt64(dealProposal.end_epoch);
+//     buf.writeBytes(dealProposal.storage_price_per_epoch.serializeBigInt());
+//     buf.writeBytes(dealProposal.provider_collateral.serializeBigInt());
+//     buf.writeBytes(dealProposal.client_collateral.serializeBigInt());
 
-    return buf.data();
-}
+//     return buf.data();
+// }
 
 function deserializeDealProposal(bytes memory rawResp) pure returns (MarketTypes.DealProposal memory ret) {
     uint byteIdx = 0;

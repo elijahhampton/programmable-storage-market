@@ -10,12 +10,13 @@ import {AccountCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v
 import {MarketCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
 import {BytesCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
 import { BigNumbers, BigNumber } from "../node_modules/@zondax/solidity-bignumber/src/BigNumbers.sol";
-import {CBOR} from "./CBOR.sol";
+import {FilecoinCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
 import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
 import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
-import {MarketDealNotifyParams, deserializeMarketDealNotifyParams, serializeDealProposal, deserializeDealProposal} from "./Types.sol";
+import {MarketDealNotifyParams, deserializeMarketDealNotifyParams, deserializeDealProposal} from "./Types.sol";
+import { CBOR } from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
 
-using CBOR for CBOR.CBORBuffer;
+// using FilecoinCBOR for FilecoinCBOR.CBORBuffer;
 
 // bounty identitied by piece_cid
 // bid identified by bid_id
@@ -114,11 +115,11 @@ contract Ubique {
     mapping(bytes => uint) public cidSizes; //cid to size
     mapping(bytes => uint64) public pieceToDealId;
 
-    mapping(bytes => BountyIndexSet) private bountyIdToBountyIndexSet;
-    mapping(bytes => BountyParameters) private bountyIdToBountyParameters;
+    mapping(bytes32 => BountyIndexSet) private bountyIdToBountyIndexSet;
+    mapping(bytes32 => BountyParameters) private bountyIdToBountyParameters;
     mapping(bytes => PieceToProviderSet) private pieceToProviderSet;
     mapping(bytes => PieceToBountyIdSet) private pieceToBountyIdSet;
-    mapping(bytes => Bid[]) private bountyIdToBids;
+    mapping(bytes32 => Bid[]) private bountyIdToBids;
     mapping(uint256 => Bid) private bidIdToBid; //
     mapping(bytes => uint256) private pieceIdToAcceptedBidId; //
     mapping(address => BidValiditySet) private providerAddressToBidValiditySet;
@@ -228,7 +229,7 @@ contract Ubique {
         uint256 bidId = pieceIdToAcceptedBidId[proposal.piece_cid.data];
         bidIdToBid[bidId].activated = true;
 
-        uint64 bountyId = pieceToBountyIdSet[proposal.piece_cid.data].bountyId;
+        bytes32 bountyId = pieceToBountyIdSet[proposal.piece_cid.data].bountyId;
         uint256 indx = bountyIdToBountyIndexSet[bountyId].idx;
 
         DealRequest storage dR = deals[indx];
@@ -266,30 +267,30 @@ contract Ubique {
         return deals[pi.idx];
     }
 
-    function getBountyDealRequest(
-        bytes32 bountyId
-    ) public view returns (bytes memory) {
-        // TODO make these array accesses safe.
-        DealRequest memory deal = getBountyDealRequestRaw(bountyId);
+    // function getBountyDealRequest(
+    //     bytes32 bountyId
+    // ) public view returns (bytes memory) {
+    //     // TODO make these array accesses safe.
+    //     DealRequest memory deal = getBountyDealRequestRaw(bountyId);
 
-        MarketTypes.DealProposal memory ret;
-        ret.piece_cid = CommonTypes.Cid(deal.piece_cid);
-        ret.piece_size = deal.piece_size;
-        ret.verified_deal = deal.verified_deal;
-        ret.client = getDelegatedAddress(address(this));
-        // Set a dummy provider. The provider that picks up this deal will need to set its own address.
-        ret.provider = FilAddresses.fromActorID(0);
-        ret.label = deal.label;
-        ret.start_epoch = deal.start_epoch;
-        ret.end_epoch = deal.end_epoch;
-        ret.storage_price_per_epoch = uintToBigInt(
-            deal.storage_price_per_epoch
-        );
-        ret.provider_collateral = uintToBigInt(deal.provider_collateral);
-        ret.client_collateral = uintToBigInt(deal.client_collateral);
+    //     MarketTypes.DealProposal memory ret;
+    //     ret.piece_cid = CommonTypes.Cid(deal.piece_cid);
+    //     ret.piece_size = deal.piece_size;
+    //     ret.verified_deal = deal.verified_deal;
+    //     ret.client = getDelegatedAddress(address(this));
+    //     // Set a dummy provider. The provider that picks up this deal will need to set its own address.
+    //     ret.provider = FilAddresses.fromActorID(0);
+    //     ret.label = deal.label;
+    //     ret.start_epoch = deal.start_epoch;
+    //     ret.end_epoch = deal.end_epoch;
+    //     ret.storage_price_per_epoch = uintToBigInt(
+    //         deal.storage_price_per_epoch
+    //     );
+    //     ret.provider_collateral = uintToBigInt(deal.provider_collateral);
+    //     ret.client_collateral = uintToBigInt(deal.client_collateral);
 
-        return serializeDealProposal(ret);
-    }
+    //     return serializeDealProposal(ret);
+    // }
 
     // Below 2 funcs need to go to filecoin.sol
     function uintToBigInt(
