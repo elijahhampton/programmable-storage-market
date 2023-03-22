@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 import {MarketAPI} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/MarketAPI.sol";
 import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
@@ -24,22 +24,21 @@ import { CBOR } from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
 contract Ubique {
     // Bounty
     struct DealRequest {
-        // To be cast to a CommonTypes.Cid
-        bytes piece_cid;
         uint64 piece_size;
         bool verified_deal;
-        // To be cast to a CommonTypes.FilAddress
-        // bytes client_addr;
+        CommonTypes.Cid piece_cid;
+        CommonTypes.FilAddress client;
         CommonTypes.FilAddress provider;
-        string label;
-        int64 start_epoch;
-        int64 end_epoch;
-        uint256 storage_price_per_epoch;
-        uint256 provider_collateral;
-        uint256 client_collateral;
-        uint64 extra_params_version;
+        CommonTypes.DealLabel label;
+        CommonTypes.ChainEpoch start_epoch;
+        CommonTypes.ChainEpoch end_epoch;
+        CommonTypes.BigInt storage_price_per_epoch;
+        CommonTypes.BigInt provider_collateral;
+        CommonTypes.BigInt client_collateral;
         ExtraParamsV1 extra_params;
     }
+
+
 
     // Extra parameters associated with the deal request. These are off-protocol flags that
     // the storage provider will need.

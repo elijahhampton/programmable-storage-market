@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 //pragma solidity ^0.8.17;
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 import { MarketTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
-import "../node_modules/solidity-cborutils/contracts/CBOR.sol";
+import { CBOR } from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
 import { FilecoinCBOR } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
 import { CBORDecoder } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/CborDecode.sol";
 import { CommonTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
@@ -20,6 +20,28 @@ struct MarketDealNotifyParams {
     bytes dealProposal;
     uint64 dealId;
 }
+
+    struct DealRequest {
+        uint64 piece_size;
+        bool verified_deal;
+        CommonTypes.Cid piece_cid;
+        CommonTypes.DealLabel label;
+        CommonTypes.FilAddress client;
+        CommonTypes.FilAddress provider;
+        CommonTypes.ChainEpoch start_epoch;
+        CommonTypes.ChainEpoch end_epoch;
+        CommonTypes.BigInt storage_price_per_epoch;
+        CommonTypes.BigInt provider_collateral;
+        CommonTypes.BigInt client_collateral;
+        ExtraParamsV1 extra_params;
+    }
+
+        struct ExtraParamsV1 {
+        string location_ref;  // where the prov can find the file
+        uint64 car_size;  // size of file
+        bool skip_ipni_announce;
+        bool remove_unsealed_copy;
+    }
 
 function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (MarketDealNotifyParams memory ret) {
     uint byteIdx = 0;
@@ -56,7 +78,7 @@ function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (M
 //     return buf.data();
 // }
 
-function deserializeDealProposal(bytes memory rawResp) pure returns (MarketTypes.DealProposal memory ret) {
+function deserializeDealProposal(bytes memory rawResp) pure returns (DealRequest memory ret) {
     uint byteIdx = 0;
     uint len;
 
