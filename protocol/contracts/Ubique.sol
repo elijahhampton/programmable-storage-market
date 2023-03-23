@@ -9,46 +9,19 @@ import {AccountTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/
 import {AccountCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/AccountCbor.sol";
 import {MarketCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/MarketCbor.sol";
 import {BytesCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BytesCbor.sol";
-import { BigNumbers, BigNumber } from "../node_modules/@zondax/solidity-bignumber/src/BigNumbers.sol";
+import {BigNumbers, BigNumber} from "../node_modules/@zondax/solidity-bignumber/src/BigNumbers.sol";
 import {FilecoinCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
 import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
 import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
-import {MarketDealNotifyParams, deserializeMarketDealNotifyParams, deserializeDealProposal} from "./Types.sol";
-import { CBOR } from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
-
-// using FilecoinCBOR for FilecoinCBOR.CBORBuffer;
+import {DealRequest, ExtraParamsV1, MarketDealNotifyParams, deserializeMarketDealNotifyParams, deserializeDealProposal} from "./Types.sol";
+import {CBOR} from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
+using CBOR for CBOR.CBORBuffer;
+using AccountCBOR for bytes;
 
 // bounty identitied by piece_cid
 // bid identified by bid_id
 
 contract Ubique {
-    // Bounty
-    struct DealRequest {
-        uint64 piece_size;
-        bool verified_deal;
-        CommonTypes.Cid piece_cid;
-        CommonTypes.FilAddress client;
-        CommonTypes.FilAddress provider;
-        CommonTypes.DealLabel label;
-        CommonTypes.ChainEpoch start_epoch;
-        CommonTypes.ChainEpoch end_epoch;
-        CommonTypes.BigInt storage_price_per_epoch;
-        CommonTypes.BigInt provider_collateral;
-        CommonTypes.BigInt client_collateral;
-        ExtraParamsV1 extra_params;
-    }
-
-
-
-    // Extra parameters associated with the deal request. These are off-protocol flags that
-    // the storage provider will need.
-    struct ExtraParamsV1 {
-        string location_ref;  // where the prov can find the file
-        uint64 car_size;  // size of file
-        bool skip_ipni_announce;
-        bool remove_unsealed_copy;
-    }
-
     struct Bid {
         uint256 bid_id;
         string path;
@@ -59,7 +32,8 @@ contract Ubique {
         BountyParameters bountyParams;
     }
 
-    struct BountyParameters {  // represents specifics reagrdeing bid
+    struct BountyParameters {
+        // represents specifics reagrdeing bid
         string region;
         uint256 storageCapacity;
         uint256 minReliability;
@@ -88,7 +62,6 @@ contract Ubique {
         bool bidIsAccepted;
     }
 
-
     uint64 public constant AUTHENTICATE_MESSAGE_METHOD_NUM = 2643134072;
     uint64 public constant DATACAP_RECEIVER_HOOK_METHOD_NUM = 3726118371;
     uint64 public constant MARKET_NOTIFY_DEAL_METHOD_NUM = 4186741094;
@@ -99,15 +72,9 @@ contract Ubique {
 
     event BountyCreated();
     event BidAccepted(bytes32 indexed bountyId, uint256 indexed bidId);
-    event BidProposed(
-        uint64 indexed bountyId,
-        uint256 indexed bidId
-    );
+    event BidProposed(bytes32 indexed bountyId, uint256 indexed bidId);
 
-    event BountyClaimed(
-        uint64 indexed bountyId,
-        uint256 indexed bidId
-    );
+    event BountyClaimed(bytes32 indexed bountyId, uint256 indexed bidId);
 
     DealRequest[] deals;
     mapping(bytes => bool) public cidSet; //cid to existence
@@ -152,7 +119,7 @@ contract Ubique {
         BountyParameters memory bountyParameters
     ) internal {
         pieceToBountyIdSet[cidraw] = PieceToBountyIdSet(bountyId, true);
-       // pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true); //
+        // pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true); //
         // map bounty id to deal request index
         bountyIdToBountyIndexSet[bountyId] = BountyIndexSet(index, true);
         bountyIdToBountyParameters[bountyId] = bountyParameters;
@@ -161,7 +128,9 @@ contract Ubique {
     }
 
     function proposeBid(bytes32 bountyId, Bid calldata bid) public payable {
-        BountyIndexSet memory bountyIndexSet = bountyIdToBountyIndexSet[bountyId];
+        BountyIndexSet memory bountyIndexSet = bountyIdToBountyIndexSet[
+            bountyId
+        ];
         // using the bountyID, we need the deal request (the bounty)
         // check to see if the bounty exists
         require(bountyIndexSet.valid, "Deal request doesn't exist");
@@ -169,7 +138,7 @@ contract Ubique {
         DealRequest memory dealRequest = deals[bountyIndexSet.idx];
 
         // maps bountyIDs to array of bids
-        // set bidID to length of array before pushing bid into it 
+        // set bidID to length of array before pushing bid into it
         bountyIdToBids[bountyId].push(bid);
 
         // emit an event indicating that a new bid was proposed
@@ -184,7 +153,9 @@ contract Ubique {
     function acceptBid(bytes32 bountyId, uint256 bidId) public {
         // check if deal request has been verified
         // We need the "DealRequest", we need to access the array
-        DealRequest storage dealRequest = deals[bountyIdToBountyIndexSet[bountyId].idx];
+        DealRequest storage dealRequest = deals[
+            bountyIdToBountyIndexSet[bountyId].idx
+        ];
         require(dealRequest.verified_deal == false, "Deal request is verified");
 
         // make sure the bid wasn’t already accepted
@@ -192,8 +163,8 @@ contract Ubique {
         require(bid.accepted == false, "bid is already accepted");
         require(bid.activated == false, "bid is already activated");
 
-        bid.accepted = true;
-        pieceIdToAcceptedBidId[dealRequest.piece_cid] = bidId;
+        bid.accepted = true; 
+        pieceIdToAcceptedBidId[dealRequest.piece_cid.data] = bidId;
 
         // confirm on filecoin network
         emit BidAccepted(bountyId, bidId);
@@ -203,7 +174,7 @@ contract Ubique {
         MarketDealNotifyParams memory mdnp = deserializeMarketDealNotifyParams(
             params
         );
-        MarketTypes.DealProposal memory proposal = deserializeDealProposal(
+        DealRequest memory proposal = deserializeDealProposal(
             mdnp.dealProposal
         );
 
@@ -306,15 +277,12 @@ contract Ubique {
     function bigIntToUint(
         CommonTypes.BigInt memory bigInt
     ) internal view returns (uint256) {
-        BigNumber memory bigNumUint = BigNumbers.init(
-            bigInt.val,
-            bigInt.neg
-        );
+        BigNumber memory bigNumUint = BigNumbers.init(bigInt.val, bigInt.neg);
         uint256 bigNumExtractedUint = uint256(bytes32(bigNumUint.val));
         return bigNumExtractedUint;
     }
 
-     // TODO fix in filecoin-solidity. They're using the wrong hex value.
+    // TODO fix in filecoin-solidity. They're using the wrong hex value.
     function getDelegatedAddress(
         address addr
     ) internal pure returns (CommonTypes.FilAddress memory) {
@@ -334,21 +302,33 @@ contract Ubique {
 
         AccountTypes.AuthenticateMessageParams memory amp = params
             .deserializeAuthenticateMessageParams();
-        MarketTypes.DealProposal memory proposal = deserializeDealProposal(
-            amp.message
-        );
+        DealRequest memory proposal = deserializeDealProposal(amp.message);
 
         bytes memory pieceCid = proposal.piece_cid.data;
         PieceToBountyIdSet memory ptBIdSet = pieceToBountyIdSet[pieceCid];
         PieceToProviderSet memory pwrSet = pieceToProviderSet[pieceCid];
 
         require(ptBIdSet.valid, "piece cid must be added before authorizing");
-        require(!pwrSet.valid, "deal failed policy check: provider already claimed this cid");
+        require(
+            !pwrSet.valid,
+            "deal failed policy check: provider already claimed this cid"
+        );
 
         DealRequest memory req = getBountyDealRequestRaw(ptBIdSet.bountyId);
-        require(proposal.verified_deal == req.verified_deal, "verified_deal param mismatch");
-        require(bigIntToUint(proposal.storage_price_per_epoch) <= req.storage_price_per_epoch, "storage price greater than request amount");
-        require(bigIntToUint(proposal.client_collateral) <= req.client_collateral, "client collateral greater than request amount");
+        require(
+            proposal.verified_deal == req.verified_deal,
+            "verified_deal param mismatch"
+        );
+        require(
+            bigIntToUint(proposal.storage_price_per_epoch) <=
+                bigIntToUint(req.storage_price_per_epoch),
+            "storage price greater than request amount"
+        );
+        require(
+            bigIntToUint(proposal.client_collateral) <=
+                bigIntToUint(req.client_collateral),
+            "client collateral greater than request amount"
+        );
     }
 
     // handle_filecoin_method is the universal entry point for any evm based
@@ -379,5 +359,4 @@ contract Ubique {
         }
         return (0, codec, ret);
     }
-
 }

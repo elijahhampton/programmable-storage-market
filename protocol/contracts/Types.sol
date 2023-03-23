@@ -2,12 +2,12 @@
 //pragma solidity ^0.8.17;
 pragma solidity ^0.8.17;
 
-import { MarketTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
-import { CBOR } from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
-import { FilecoinCBOR } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
-import { CBORDecoder } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/CborDecode.sol";
-import { CommonTypes } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
-import { BigIntCBOR } from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BigIntCbor.sol";
+import {MarketTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/MarketTypes.sol";
+import {CBOR} from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
+import {FilecoinCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
+import {CBORDecoder} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/CborDecode.sol";
+import {CommonTypes} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
+import {BigIntCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/BigIntCbor.sol";
 //import { Buffer } from "./Buffer.sol";
 
 using CBOR for CBOR.CBORBuffer;
@@ -21,29 +21,31 @@ struct MarketDealNotifyParams {
     uint64 dealId;
 }
 
-    struct DealRequest {
-        uint64 piece_size;
-        bool verified_deal;
-        CommonTypes.Cid piece_cid;
-        CommonTypes.DealLabel label;
-        CommonTypes.FilAddress client;
-        CommonTypes.FilAddress provider;
-        CommonTypes.ChainEpoch start_epoch;
-        CommonTypes.ChainEpoch end_epoch;
-        CommonTypes.BigInt storage_price_per_epoch;
-        CommonTypes.BigInt provider_collateral;
-        CommonTypes.BigInt client_collateral;
-        ExtraParamsV1 extra_params;
-    }
+struct DealRequest {
+    uint64 piece_size;
+    bool verified_deal;
+    CommonTypes.Cid piece_cid;
+    CommonTypes.DealLabel label;
+    CommonTypes.FilAddress client;
+    CommonTypes.FilAddress provider;
+    CommonTypes.ChainEpoch start_epoch;
+    CommonTypes.ChainEpoch end_epoch;
+    CommonTypes.BigInt storage_price_per_epoch;
+    CommonTypes.BigInt provider_collateral;
+    CommonTypes.BigInt client_collateral;
+    ExtraParamsV1 extra_params;
+}
 
-        struct ExtraParamsV1 {
-        string location_ref;  // where the prov can find the file
-        uint64 car_size;  // size of file
-        bool skip_ipni_announce;
-        bool remove_unsealed_copy;
-    }
+struct ExtraParamsV1 {
+    string location_ref; // where the prov can find the file
+    uint64 car_size; // size of file
+    bool skip_ipni_announce;
+    bool remove_unsealed_copy;
+}
 
-function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (MarketDealNotifyParams memory ret) {
+function deserializeMarketDealNotifyParams(
+    bytes memory rawResp
+) pure returns (MarketDealNotifyParams memory ret) {
     uint byteIdx = 0;
     uint len;
 
@@ -78,7 +80,9 @@ function deserializeMarketDealNotifyParams(bytes memory rawResp) pure returns (M
 //     return buf.data();
 // }
 
-function deserializeDealProposal(bytes memory rawResp) pure returns (DealRequest memory ret) {
+function deserializeDealProposal(
+    bytes memory rawResp
+) pure returns (DealRequest memory ret) {
     uint byteIdx = 0;
     uint len;
 
@@ -88,12 +92,12 @@ function deserializeDealProposal(bytes memory rawResp) pure returns (DealRequest
     bytes memory piece_cid;
     (piece_cid, byteIdx) = rawResp.readBytes(byteIdx);
     assert(piece_cid[0] == 0x00);
-    
+
     // Pop off the first byte, which corresponds to the historical multibase 0x00 byte.
     // https://ipld.io/specs/codecs/dag-cbor/spec/#links
     ret.piece_cid.data = new bytes(piece_cid.length - 1);
     for (uint256 i = 1; i < piece_cid.length; i++) {
-        ret.piece_cid.data[i-1] = piece_cid[i];
+        ret.piece_cid.data[i - 1] = piece_cid[i];
     }
 
     (ret.piece_size, byteIdx) = rawResp.readUInt64(byteIdx);
@@ -101,13 +105,14 @@ function deserializeDealProposal(bytes memory rawResp) pure returns (DealRequest
     (ret.client.data, byteIdx) = rawResp.readBytes(byteIdx);
     (ret.provider.data, byteIdx) = rawResp.readBytes(byteIdx);
 
-    (ret.label, byteIdx) = rawResp.readString(byteIdx);
+    (CommonTypes.DealLabel(ret.label), byteIdx) = rawResp.readString(byteIdx);
     (ret.start_epoch, byteIdx) = rawResp.readInt64(byteIdx);
     (ret.end_epoch, byteIdx) = rawResp.readInt64(byteIdx);
 
     bytes memory storage_price_per_epoch_bytes;
     (storage_price_per_epoch_bytes, byteIdx) = rawResp.readBytes(byteIdx);
-    ret.storage_price_per_epoch = storage_price_per_epoch_bytes.deserializeBigInt();
+    ret.storage_price_per_epoch = storage_price_per_epoch_bytes
+        .deserializeBigInt();
 
     bytes memory provider_collateral_bytes;
     (provider_collateral_bytes, byteIdx) = rawResp.readBytes(byteIdx);
