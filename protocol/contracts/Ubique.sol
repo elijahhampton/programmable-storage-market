@@ -13,7 +13,7 @@ import {BigNumbers, BigNumber} from "../node_modules/@zondax/solidity-bignumber/
 import {FilecoinCBOR} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/cbor/FilecoinCbor.sol";
 import {Misc} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/Misc.sol";
 import {FilAddresses} from "../node_modules/@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
-import {DealRequest, ExtraParamsV1, MarketDealNotifyParams, deserializeMarketDealNotifyParams, deserializeDealProposal} from "./Types.sol";
+import {Bid, BountyParameters, BountyIndexSet, PieceToBountyIdSet, PieceToProviderSet, BidValiditySet, DealRequest, ExtraParamsV1, MarketDealNotifyParams, deserializeMarketDealNotifyParams, deserializeDealProposal} from "./Types.sol";
 import {CBOR} from "../node_modules/solidity-cborutils/contracts/CBOR.sol";
 using CBOR for CBOR.CBORBuffer;
 using AccountCBOR for bytes;
@@ -22,46 +22,6 @@ using AccountCBOR for bytes;
 // bid identified by bid_id
 
 contract Ubique {
-    struct Bid {
-        uint256 bid_id;
-        string path;
-        CommonTypes.FilAddress providerFilAddress;
-        address provider;
-        bool activated;
-        bool accepted;
-        BountyParameters bountyParams;
-    }
-
-    struct BountyParameters {
-        // represents specifics reagrdeing bid
-        string region;
-        uint256 storageCapacity;
-        uint256 minReliability;
-        uint256 maxPrice;
-        uint256 collateralSupplied;
-    }
-
-    struct BountyIndexSet {
-        uint256 idx;
-        bool valid;
-    }
-
-    struct PieceToBountyIdSet {
-        bytes32 bountyId;
-        bool valid;
-    }
-
-    struct PieceToProviderSet {
-        bytes provider;
-        bool valid;
-    }
-
-    struct BidValiditySet {
-        address bidder;
-        bytes32 bounty_id;
-        bool bidIsAccepted;
-    }
-
     uint64 public constant AUTHENTICATE_MESSAGE_METHOD_NUM = 2643134072;
     uint64 public constant DATACAP_RECEIVER_HOOK_METHOD_NUM = 3726118371;
     uint64 public constant MARKET_NOTIFY_DEAL_METHOD_NUM = 4186741094;
@@ -70,7 +30,7 @@ contract Ubique {
     address public constant DATACAP_ACTOR_ETH_ADDRESS =
         address(0xfF00000000000000000000000000000000000007);
 
-    event BountyCreated();
+    event BountyCreated(bytes32 indexed bountyId);
     event BidAccepted(bytes32 indexed bountyId, uint256 indexed bidId);
     event BidProposed(bytes32 indexed bountyId, uint256 indexed bidId);
 
@@ -90,8 +50,6 @@ contract Ubique {
     mapping(bytes => uint256) private pieceIdToAcceptedBidId; //
     mapping(address => BidValiditySet) private providerAddressToBidValiditySet;
 
-    constructor() {}
-
     function addBounty(
         DealRequest calldata newBounty,
         BountyParameters memory bountyParameters
@@ -106,7 +64,7 @@ contract Ubique {
             abi.encodePacked(block.timestamp, msg.sender, index)
         );
 
-        storeBounty(bountyId, index, newBounty.piece_cid, newBounty.piece_size);
+        storeBounty(bountyId, index, newBounty.piece_cid, newBounty.piece_size, bountyParameters);
 
         emit BountyCreated(bountyId);
     }
@@ -114,20 +72,20 @@ contract Ubique {
     function storeBounty(
         bytes32 bountyId,
         uint256 index,
-        bytes calldata cidraw,
+        CommonTypes.Cid memory cidraw,
         uint size,
         BountyParameters memory bountyParameters
     ) internal {
-        pieceToBountyIdSet[cidraw] = PieceToBountyIdSet(bountyId, true);
+        pieceToBountyIdSet[cidraw.data] = PieceToBountyIdSet(bountyId, true);
         // pieceToProviderSet[bountyId] = PieceToProviderSet(bountyId, true); //
         // map bounty id to deal request index
         bountyIdToBountyIndexSet[bountyId] = BountyIndexSet(index, true);
         bountyIdToBountyParameters[bountyId] = bountyParameters;
 
-        cidSizes[cidraw] = size;
+        cidSizes[cidraw.data] = size;
     }
 
-    function proposeBid(bytes32 bountyId, Bid calldata bid) public payable {
+    function proposeBid(bytes32 bountyId, Bid memory bid) public payable {
         BountyIndexSet memory bountyIndexSet = bountyIdToBountyIndexSet[
             bountyId
         ];
@@ -143,8 +101,8 @@ contract Ubique {
 
         // emit an event indicating that a new bid was proposed
         uint256 bidId = bountyIdToBids[bountyId].length;
-        bid.bid_id = bidId;
-        bid.provider = msg.sender;
+        //bid.bid_id = bidId; can't do this here because the struct is stored in memory. I don't think it's necessary anyway
+     //   bid.provider = msg.sender;  why is the provider set here? 
         bidIdToBid[bidId] = bid;
         // providerAddressToBidValiditySet[msg.sender] = BidValiditySet(msg.sender, bountyId, false);
         emit BidProposed(bountyId, bidId);

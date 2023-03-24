@@ -21,6 +21,57 @@ struct MarketDealNotifyParams {
     uint64 dealId;
 }
 
+    struct Bid {
+        uint256 bid_id;
+        string path;
+        CommonTypes.FilAddress providerFilAddress;
+        address provider;
+        bool activated;
+        bool accepted;
+        BountyParameters bountyParams;
+    }
+
+    struct BountyParameters {
+        // represents specifics reagrdeing bid
+        string region;
+        uint256 storageCapacity;
+        uint256 minReliability;
+        uint256 maxPrice;
+        uint256 collateralSupplied;
+    }
+
+    struct BountyIndexSet {
+        uint256 idx;
+        bool valid;
+    }
+
+    struct PieceToBountyIdSet {
+        bytes32 bountyId;
+        bool valid;
+    }
+
+    struct PieceToProviderSet {
+        bytes provider;
+        bool valid;
+    }
+
+    struct BidValiditySet {
+        address bidder;
+        bytes32 bounty_id;
+        bool bidIsAccepted;
+    }
+
+/// @param piece_cid PieceCID.
+/// @param piece_size the size of the piece.
+/// @param verified_deal if the deal is verified or not.
+/// @param client the address of the storage client.
+/// @param provider the address of the storage provider.
+/// @param label any label that client choose for the deal.
+/// @param start_epoch the chain epoch to start the deal.
+/// @param end_epoch the chain epoch to end the deal.
+/// @param storage_price_per_epoch the token amount to pay to provider per epoch.
+/// @param provider_collateral the token amount as collateral paid by the provider.
+/// @param client_collateral the token amount as collateral paid by the client.
 struct DealRequest {
     uint64 piece_size;
     bool verified_deal;
@@ -28,8 +79,8 @@ struct DealRequest {
     CommonTypes.DealLabel label;
     CommonTypes.FilAddress client;
     CommonTypes.FilAddress provider;
-    CommonTypes.ChainEpoch start_epoch;
-    CommonTypes.ChainEpoch end_epoch;
+    int64 start_epoch;
+    int64 end_epoch;
     CommonTypes.BigInt storage_price_per_epoch;
     CommonTypes.BigInt provider_collateral;
     CommonTypes.BigInt client_collateral;
@@ -105,7 +156,7 @@ function deserializeDealProposal(
     (ret.client.data, byteIdx) = rawResp.readBytes(byteIdx);
     (ret.provider.data, byteIdx) = rawResp.readBytes(byteIdx);
 
-    (CommonTypes.DealLabel(ret.label), byteIdx) = rawResp.readString(byteIdx);
+    (ret.label.data, byteIdx) = rawResp.readBytes(byteIdx);
     (ret.start_epoch, byteIdx) = rawResp.readInt64(byteIdx);
     (ret.end_epoch, byteIdx) = rawResp.readInt64(byteIdx);
 
