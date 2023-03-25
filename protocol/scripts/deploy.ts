@@ -1,42 +1,25 @@
-import { ethers } from "hardhat";
+require("hardhat-deploy")
+require("hardhat-deploy-ethers")
+import 'hardhat-deploy'
+import 'hardhat-deploy-ethers'
+import { ethers, network } from 'hardhat'
 
-/**
- * The code calculates the current timestamp in seconds since epoch,
- * defines an unlock time 60 seconds in the future, and deploys a new
- * instance of a smart contract called Lock with a locked amount of
- * 0.001 ETH and an unlock time of 60 seconds in the future. The 
- * contract address is logged to the console. If any errors occur, they
- * are logged to the console and the process exit code is set to 1.
- */
-async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  // Calculate the current timestamps in seconds since epoch (Unix time) and round it to the nearest second.
-  
-  const unlockTime = currentTimestampInSeconds + 60;
-  // Define the unlock time to be 60 seconds after the current timestamp
+import { networkConfig } from '../helper-hardhat-config'
+import { Ubique } from '../typechain-types'
 
-  const lockedAmount = ethers.utils.parseEther("0.001");
-  // Parse a string representing 0.001 ETH as a BigNumber and store it in lockedAmount
+//@ts-ignore
+const private_key: string = network.config.accounts[0]
+const wallet = new ethers.Wallet(private_key, ethers.provider)
 
-  const Lock = await ethers.getContractFactory("Lock");
-  // Get the Lock contract factory from ethers and store it in Lock
+module.exports = async ({ deployments }: { deployments: any}) => {
+    console.log("Wallet Ethereum Address:", wallet.address)
+    const chainId: number | undefined = network.config.chainId
 
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-  // Deploy a new instance of the Lock contract, passing in the unlock time and the locked amount as options
-
-  await lock.deployed();
-  // Wait for the contract deployment transaction to be confirmed
-
-  console.log(
-    // Log a message to the console indicating that the contract has been deployed, including the locked amount, unlock time, and contract address
-    `Lock with ${ethers.utils.formatEther(lockedAmount)}ETH and unlock timestamp ${unlockTime} deployed to ${lock.address}`
-  );
+    //deploy FilecoinMarketConsumer
+    const Ubique = await ethers.getContractFactory('Ubique', wallet);
+    console.log('Deploying Ubique...');
+    const ubique: Ubique = await Ubique.deploy();
+    await ubique.deployed()
+    //@ts-ignore
+    console.log('Ubique deployed to:', ubique.address);
 }
-
-// Call the main function and handle any errors that occur
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
